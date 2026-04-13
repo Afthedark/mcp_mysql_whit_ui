@@ -114,6 +114,25 @@ const buildAgentQueryPrompt = async (question, context) => {
                 schemaSection += '\n';
             });
         }
+        
+        // Add relationships if available
+        if (schema.relationships && schema.relationships.length > 0) {
+            schemaSection += 'RELACIONES ENTRE TABLAS:\n';
+            schema.relationships.forEach(rel => {
+                schemaSection += `  - ${rel.from} → ${rel.to} (${rel.type}) ON ${rel.on}: ${rel.description}\n`;
+            });
+            schemaSection += '\n';
+        }
+        
+        // Add important notes if available
+        if (schema.importantNotes && schema.importantNotes.length > 0) {
+            schemaSection += 'NOTAS CRÍTICAS PARA CONSULTAS:\n';
+            schema.importantNotes.forEach(note => {
+                schemaSection += `  ⚠️ ${note}\n`;
+            });
+            schemaSection += '\n';
+        }
+        
         schemaSection += '=== FIN DEL ESQUEMA ===\n';
     } else if (schemaDescription) {
         schemaSection = `=== ESTRUCTURA DE LA BASE DE DATOS ===\n${schemaDescription}\n`;
@@ -162,7 +181,10 @@ ${examplesSection}
 INSTRUCCIONES:
 - Eres un analista de datos amigable y conversacional
 - Responde en español de forma natural y ${tone === 'professional' ? 'profesional' : 'amigable'}
-- Usa EXACTAMENTE los nombres de tablas y columnas del esquema proporcionado
+- Usa EXACTAMENTE los nombres de tablas y columnas del ESQUEMA proporcionado arriba
+- Verifica SIEMPRE los nombres de columnas en el esquema antes de escribir el SQL
+- Para calcular cantidades, usa: CASE WHEN cant_total > 0 THEN cant_total ELSE cantidad END
+- El campo precio se llama 'precio_unitario' en lin_pedidos, NO 'precio'
 - Si la pregunta es un seguimiento, usa el contexto previo para entender mejor
 - Sugiere insights relevantes basados en los datos cuando sea apropiado
 - Si detectas anomalías o patrones interesantes, menciónalos
