@@ -8,6 +8,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 const chatRoutes = require('./routes/chatRoutes');
 const connectionRoutes = require('./routes/connectionRoutes');
 const mcpGatewayRoutes = require('./routes/mcpGateway');
+const agentConfigRoutes = require('./routes/agentConfigRoutes');
 
 const app = express();
 app.use(cors());
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use('/api/chat', chatRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/mcp', mcpGatewayRoutes);
+app.use('/api/agent-config', agentConfigRoutes);
 
 // System info
 app.get('/api/system/info', (req, res) => {

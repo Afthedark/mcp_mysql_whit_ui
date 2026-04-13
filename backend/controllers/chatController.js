@@ -3,14 +3,16 @@ const aiService = require('../services/aiService');
 const sqlValidator = require('../services/sqlValidator');
 const dbManager = require('../services/dbManager');
 const promptBuilder = require('../services/promptBuilder');
+const agentContext = require('../services/agentContextService');
 const { AppError } = require('../middleware/errorHandler');
 
 /**
  * Main chat handler: natural language → SQL → execute → interpret
+ * Now with Agent Memory and Context
  */
 const handleChat = async (req, res, next) => {
     try {
-        const { question, historyId, connectionId } = req.body;
+        const { question, historyId, connectionId, agentMode = true } = req.body;
 
         if (!question) throw new AppError('Question cannot be empty', 400);
         if (!connectionId) throw new AppError('You must select a database connection', 400);
@@ -26,18 +28,35 @@ const handleChat = async (req, res, next) => {
             currentChatId = newChat.id;
         }
 
-        // Save user message
-        await Message.create({ chatId: parseInt(currentChatId), role: 'user', content: question });
+        // Build agent context (for memory and follow-up detection)
+        const context = await agentContext.buildContext(currentChatId, connectionId);
+        
+        // Enrich question with context if it's a follow-up
+        const enriched = agentContext.enrichQuestionWithContext(question, context);
+        const questionToProcess = enriched.question;
 
-        // Get history for context
-        const history = await Message.findAll({
-            where: { chatId: currentChatId },
-            order: [['createdAt', 'DESC']],
-            limit: 10
+        // Save user message
+        await Message.create({ 
+            chatId: parseInt(currentChatId), 
+            role: 'user', 
+            content: question,
+            contextSnapshot: agentContext.createContextSnapshot(context)
         });
 
-        // Build natural query prompt
-        const { systemPrompt, userPrompt } = await promptBuilder.buildNaturalQueryPrompt(question, connectionId);
+        // Build prompt with agent context if enabled
+        let systemPrompt, userPrompt;
+        if (agentMode) {
+            const promptResult = await promptBuilder.buildAgentQueryPrompt(questionToProcess, {
+                ...context,
+                enriched
+            });
+            systemPrompt = promptResult.systemPrompt;
+            userPrompt = promptResult.userPrompt;
+        } else {
+            const promptResult = await promptBuilder.buildNaturalQueryPrompt(questionToProcess, connectionId);
+            systemPrompt = promptResult.systemPrompt;
+            userPrompt = promptResult.userPrompt;
+        }
 
         // Generate SQL
         let generatedSQL;
@@ -76,26 +95,42 @@ const handleChat = async (req, res, next) => {
             return res.json({ success: true, reply: errorMsg, sqlGenerated: cleanSQL, sqlExecuted: cleanSQL, historyId: parseInt(currentChatId) });
         }
 
-        // Interpret results with AI
+        // Extract metadata for memory
+        const metadata = agentContext.extractMetadata(question, cleanSQL, queryResults);
+
+        // Interpret results with AI (using agent mode if enabled)
         let finalReply;
         try {
-            const { systemPrompt: busSystem, userPrompt: busUser } = await promptBuilder.buildResultsInterpretationPrompt(question, cleanSQL, queryResults);
+            let interpretationPrompt;
+            if (agentMode) {
+                interpretationPrompt = await promptBuilder.buildAgentInterpretationPrompt(question, cleanSQL, queryResults, context);
+            } else {
+                interpretationPrompt = await promptBuilder.buildResultsInterpretationPrompt(question, cleanSQL, queryResults);
+            }
             finalReply = await aiService.generateResponse([
-                { role: 'system', content: busSystem },
-                { role: 'user', content: busUser }
+                { role: 'system', content: interpretationPrompt.systemPrompt },
+                { role: 'user', content: interpretationPrompt.userPrompt }
             ]);
         } catch (error) {
             finalReply = `Datos recuperados correctamente (${queryResults.length} filas).`;
         }
 
-        // Save assistant message
+        // Generate suggestions for next questions
+        const suggestions = agentMode ? agentContext.generateSuggestions(context, metadata) : [];
+
+        // Save assistant message with metadata
         await Message.create({
             chatId: parseInt(currentChatId),
             role: 'assistant',
             content: finalReply,
             sqlGenerated: cleanSQL,
             sqlExecuted: cleanSQL,
-            connectionName: dbConfig.name
+            connectionName: dbConfig.name,
+            metadata: metadata,
+            contextSnapshot: agentContext.createContextSnapshot({
+                ...context,
+                lastTopic: metadata.topic || context.lastTopic
+            })
         });
 
         res.json({
@@ -104,7 +139,13 @@ const handleChat = async (req, res, next) => {
             sqlGenerated: cleanSQL,
             sqlExecuted: cleanSQL,
             historyId: parseInt(currentChatId),
-            rowCount: queryResults.length
+            rowCount: queryResults.length,
+            suggestions: suggestions,
+            agentContext: {
+                isFollowUp: enriched.isFollowUp,
+                topic: metadata.topic,
+                enriched: enriched.enriched
+            }
         });
     } catch (error) {
         next(error);
@@ -133,13 +174,18 @@ const getChatMessages = async (req, res, next) => {
 };
 
 /**
- * Delete a chat
+ * Delete a chat and its messages
  */
 const deleteChat = async (req, res, next) => {
     try {
         const { chatId } = req.params;
         const chat = await Chat.findByPk(chatId);
         if (!chat) throw new AppError('Chat not found', 404);
+        
+        // Delete associated messages first (SQLite FK constraint workaround)
+        await Message.destroy({ where: { chatId } });
+        
+        // Now delete the chat
         await chat.destroy();
         res.json({ success: true, message: 'Chat deleted' });
     } catch (error) { next(error); }

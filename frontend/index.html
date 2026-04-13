@@ -38,6 +38,7 @@
                 <ul class="nav flex-column gap-1">
                     <li class="nav-item"><a href="#" class="nav-link w-100 text-start btn-custom rounded-3" :class="{'active-nav': activeTab === 'chat'}" @click.prevent="activeTab='chat'"><i class="bi bi-chat-dots me-2"></i> Chat IA</a></li>
                     <li class="nav-item"><a href="#" class="nav-link w-100 text-start btn-custom rounded-3" :class="{'active-nav': activeTab === 'connections'}" @click.prevent="activeTab='connections'"><i class="bi bi-plug me-2"></i> Conexiones</a></li>
+                    <li class="nav-item"><a href="#" class="nav-link w-100 text-start btn-custom rounded-3" :class="{'active-nav': activeTab === 'agent-config'}" @click.prevent="activeTab='agent-config'"><i class="bi bi-robot me-2"></i> Configurar Agente</a></li>
                 </ul>
             </nav>
 
@@ -85,6 +86,14 @@
                     <button x-show="currentChatId && activeTab === 'chat'" class="btn btn-sm btn-outline-secondary rounded-pill px-3" @click="newChat()"><i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Nuevo Chat</span></button>
                 </div>
                 <div class="d-flex align-items-center gap-2">
+                    <!-- Agent Mode Toggle -->
+                    <button @click="toggleAgentMode()" 
+                            class="btn btn-sm rounded-pill px-3 d-flex align-items-center gap-2"
+                            :class="agentContext.isActive ? 'btn-primary' : 'btn-outline-secondary'"
+                            :title="agentContext.isActive ? 'Modo Agente activado - Usa memoria y contexto' : 'Modo Agente desactivado'">
+                        <i class="bi" :class="agentContext.isActive ? 'bi-robot' : 'bi-person'"></i>
+                        <span class="d-none d-md-inline" x-text="agentContext.isActive ? 'Agente' : 'Chat'"></span>
+                    </button>
                     <button @click="toggleTheme()" class="theme-icon-btn" :title="theme === 'dark' ? 'Cambiar tema' : ''" :aria-label="theme === 'dark' ? 'Modo claro' : 'Modo oscuro'">
                         <i class="bi" :class="theme === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars-fill'"></i>
                     </button>
@@ -100,6 +109,34 @@
 
                 <!-- Chat Tab -->
                 <div x-show="activeTab === 'chat'" class="h-100 d-flex flex-column">
+                    <!-- Agent Context Panel -->
+                    <div x-show="agentContext.isActive && (agentContext.lastTopic || agentContext.suggestions.length > 0)" 
+                         class="agent-context-panel mb-2 p-2 rounded-3 border"
+                         style="background:var(--bg-darker); border-color:var(--c-border) !important; font-size:0.85rem;">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <i class="bi bi-robot text-primary"></i>
+                            <span class="fw-semibold" style="color:var(--c-text-1)">Contexto del Agente</span>
+                        </div>
+                        <div x-show="agentContext.lastTopic" class="small mb-1" style="color:var(--c-text-2)">
+                            <i class="bi bi-tag-fill me-1 opacity-50"></i>
+                            Tema: <span x-text="agentContext.lastTopic" class="text-primary"></span>
+                        </div>
+                        <div x-show="agentContext.suggestions.length > 0" class="mt-2">
+                            <div class="small mb-1" style="color:var(--c-text-2)">
+                                <i class="bi bi-lightbulb me-1 opacity-50"></i>
+                                Sugerencias:
+                            </div>
+                            <div class="d-flex flex-wrap gap-1">
+                                <template x-for="suggestion in agentContext.suggestions" :key="suggestion">
+                                    <button @click="useSuggestion(suggestion)" 
+                                            class="btn btn-xs btn-outline-primary rounded-pill"
+                                            style="font-size:0.75rem; padding:0.15rem 0.5rem;"
+                                            x-text="suggestion"></button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Deep Chat Component -->
                     <deep-chat 
                         id="deep-chat-element"
@@ -138,6 +175,333 @@
                                 <button class="btn btn-sm btn-primary rounded-pill" @click="openConnModal()">Crear primera conexión</button>
                             </div>
                         </template>
+                    </div>
+                </div>
+
+                <!-- Agent Config Tab -->
+                <div x-show="activeTab === 'agent-config'" class="h-100 overflow-auto">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h5 class="m-0" style="color:var(--c-text-1)">Configuración del Agente IA</h5>
+                            <p class="small mb-0 mt-1" style="color:var(--c-text-2)">Personaliza cómo responde el agente y define la estructura de tus datos</p>
+                        </div>
+                        <button class="btn btn-sm btn-primary rounded-pill px-3" @click="saveAgentConfig()" :disabled="!agentConfigData.connectionId">
+                            <i class="bi bi-save me-1"></i> Guardar Configuración
+                        </button>
+                    </div>
+
+                    <!-- Connection Selector for Config - Multi-Select -->
+                    <div class="mb-4 p-3 rounded-3 border" style="background:var(--bg-darker); border-color:var(--c-border) !important;">
+                        <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Seleccionar Base(s) de Datos</label>
+                        <div class="form-text small mb-2" style="color:var(--c-text-2)">La misma configuración se aplicará a todas las seleccionadas</div>
+                        
+                        <!-- Selected Connections Badges -->
+                        <div class="selected-connections mb-2 d-flex flex-wrap gap-1">
+                            <template x-for="connId in agentConfigData.connectionIds" :key="connId">
+                                <span class="badge bg-primary d-flex align-items-center gap-1">
+                                    <span x-text="getConnectionName(connId)"></span>
+                                    <button @click="removeConnection(connId)" class="btn-close btn-close-white" style="font-size:0.5rem;"></button>
+                                </span>
+                            </template>
+                            <span x-show="agentConfigData.connectionIds.length === 0" class="text-muted small">Ninguna conexión seleccionada</span>
+                        </div>
+                        
+                        <!-- Add Connection Dropdown -->
+                        <select @change="addConnection($event.target.value); $event.target.value=''" class="form-select form-select-sm">
+                            <option value="">+ Agregar conexión...</option>
+                            <template x-for="conn in availableConnectionsForConfig" :key="conn.id">
+                                <option :value="conn.id" x-text="conn.name + ' (' + conn.database + ')'"></option>
+                            </template>
+                        </select>
+                        
+                        <!-- Select All Button -->
+                        <div class="mt-2" x-show="connectionsWithSameDatabase.length > 1">
+                            <button class="btn btn-xs btn-outline-secondary rounded-pill" @click="selectAllSameDatabase()">
+                                <i class="bi bi-check-all"></i> Seleccionar todas con <span x-text="getCurrentDatabaseName()"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Config Tabs -->
+                    <div x-show="agentConfigData.connectionIds.length > 0" class="agent-config-container">
+                        <ul class="nav nav-pills mb-3" style="border-bottom:1px solid var(--c-border);">
+                            <li class="nav-item">
+                                <button class="nav-link btn-sm" 
+                                        :class="{'active': agentConfigTab === 'schema', 'text-light': theme === 'dark' && agentConfigTab !== 'schema'}"
+                                        @click="agentConfigTab = 'schema'">
+                                    <i class="bi bi-table me-1"></i> Esquema BD
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link btn-sm" 
+                                        :class="{'active': agentConfigTab === 'personality', 'text-light': theme === 'dark' && agentConfigTab !== 'personality'}"
+                                        @click="agentConfigTab = 'personality'">
+                                    <i class="bi bi-emoji-smile me-1"></i> Personalidad
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link btn-sm" 
+                                        :class="{'active': agentConfigTab === 'context', 'text-light': theme === 'dark' && agentConfigTab !== 'context'}"
+                                        @click="agentConfigTab = 'context'">
+                                    <i class="bi bi-briefcase me-1"></i> Contexto Negocio
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link btn-sm" 
+                                        :class="{'active': agentConfigTab === 'sql-examples', 'text-light': theme === 'dark' && agentConfigTab !== 'sql-examples'}"
+                                        @click="agentConfigTab = 'sql-examples'">
+                                    <i class="bi bi-code-square me-1"></i> Ejemplos SQL
+                                    <span x-show="agentConfigData.sqlExamples.length > 0" 
+                                          class="badge bg-primary ms-1" 
+                                          x-text="agentConfigData.sqlExamples.length"></span>
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Schema Tab -->
+                        <div x-show="agentConfigTab === 'schema'" class="config-section">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Descripción General del Esquema</label>
+                                <textarea x-model="agentConfigData.schemaDescription" class="form-control form-control-sm" rows="3" 
+                                          placeholder="Describe las tablas principales y su propósito..."></textarea>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-label small fw-semibold m-0" style="color:var(--c-text-1)">Tablas</label>
+                                <button class="btn btn-xs btn-outline-primary rounded-pill" @click="addTable()">
+                                    <i class="bi bi-plus-lg"></i> Agregar Tabla
+                                </button>
+                            </div>
+
+                            <div class="tables-list">
+                                <template x-for="(table, tableIndex) in agentConfigData.tables" :key="tableIndex">
+                                    <div class="table-item mb-3 p-3 rounded-3 border" style="background:var(--bg-darker); border-color:var(--c-border) !important;">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <input type="text" x-model="table.name" class="form-control form-control-sm" placeholder="Nombre de tabla" style="max-width:200px;">
+                                            <button class="btn btn-xs btn-outline-danger rounded-pill" @click="removeTable(tableIndex)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                        <input type="text" x-model="table.description" class="form-control form-control-sm mb-2" placeholder="Descripción de la tabla">
+                                        
+                                        <div class="columns-list ms-3">
+                                            <div class="small mb-1" style="color:var(--c-text-2)">Columnas:</div>
+                                            <template x-for="(col, colIndex) in table.columns" :key="colIndex">
+                                                <div class="d-flex gap-2 mb-1 align-items-center">
+                                                    <input type="text" x-model="col.name" class="form-control form-control-sm" placeholder="nombre" style="max-width:120px;">
+                                                    <select x-model="col.type" class="form-select form-select-sm" style="max-width:100px;">
+                                                        <option value="">Tipo...</option>
+                                                        <option value="INT">INT</option>
+                                                        <option value="VARCHAR">VARCHAR</option>
+                                                        <option value="TEXT">TEXT</option>
+                                                        <option value="DECIMAL">DECIMAL</option>
+                                                        <option value="DATETIME">DATETIME</option>
+                                                        <option value="DATE">DATE</option>
+                                                        <option value="BOOLEAN">BOOLEAN</option>
+                                                    </select>
+                                                    <input type="text" x-model="col.description" class="form-control form-control-sm" placeholder="Descripción">
+                                                    <div class="form-check form-check-inline">
+                                                        <input type="checkbox" x-model="col.pk" class="form-check-input" :id="'pk-'+tableIndex+'-'+colIndex">
+                                                        <label class="form-check-label small" :for="'pk-'+tableIndex+'-'+colIndex">PK</label>
+                                                    </div>
+                                                    <button class="btn btn-xs btn-link text-danger" @click="removeColumn(tableIndex, colIndex)">
+                                                        <i class="bi bi-x"></i>
+                                                    </button>
+                                                </div>
+                                            </template>
+                                            <button class="btn btn-xs btn-outline-secondary rounded-pill mt-1" @click="addColumn(tableIndex)">
+                                                <i class="bi bi-plus"></i> Columna
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Personality Tab -->
+                        <div x-show="agentConfigTab === 'personality'" class="config-section">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Nombre del Agente</label>
+                                    <input type="text" x-model="agentConfigData.personality.name" class="form-control form-control-sm" placeholder="DataBot">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Tono</label>
+                                    <select x-model="agentConfigData.personality.tone" class="form-select form-select-sm">
+                                        <option value="professional">Profesional</option>
+                                        <option value="casual">Casual/Amigable</option>
+                                        <option value="technical">Técnico</option>
+                                        <option value="enthusiastic">Entusiasta</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Estilo de Respuesta</label>
+                                    <select x-model="agentConfigData.personality.responseStyle" class="form-select form-select-sm">
+                                        <option value="concise">Conciso</option>
+                                        <option value="detailed">Detallado</option>
+                                        <option value="with-examples">Con ejemplos</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Saludo Inicial</label>
+                                    <input type="text" x-model="agentConfigData.personality.greeting" class="form-control form-control-sm" 
+                                           placeholder="¡Hola! Soy tu asistente de datos.">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Instrucciones Especiales</label>
+                                    <textarea x-model="agentConfigData.personality.specialInstructions" class="form-control form-control-sm" rows="4"
+                                              placeholder="Reglas adicionales para el agente... (ej: Siempre incluye el período de tiempo en las respuestas)"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Business Context Tab -->
+                        <div x-show="agentConfigTab === 'context'" class="config-section">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Descripción del Negocio</label>
+                                <textarea x-model="agentConfigData.businessContext.description" class="form-control form-control-sm" rows="4"
+                                          placeholder="Describe tu negocio, industria, tipo de operación..."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Términos Específicos</label>
+                                <textarea x-model="agentConfigData.businessContext.terms" class="form-control form-control-sm" rows="4"
+                                          placeholder="Define términos específicos:&#10;- Venta: transacción completa&#10;- Pedido: orden de compra&#10;- Cliente: persona que compra"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" style="color:var(--c-text-1)">KPIs Importantes</label>
+                                <textarea x-model="agentConfigData.businessContext.kpis" class="form-control form-control-sm" rows="3"
+                                          placeholder="Métricas clave que el agente debe conocer...&#10;- Ventas diarias&#10;- Ticket promedio&#10;- Tasa de conversión"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Ejemplos de Consultas Comunes</label>
+                                <textarea x-model="agentConfigData.businessContext.commonQueries" class="form-control form-control-sm" rows="4"
+                                          placeholder="Ejemplos de preguntas que haces frecuentemente..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- SQL Examples Tab -->
+                        <div x-show="agentConfigTab === 'sql-examples'" class="config-section">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold" style="color:var(--c-text-1)">Agregar Nuevo Ejemplo</label>
+                                <div class="p-3 rounded-3 border" style="background:var(--bg-darker); border-color:var(--c-border) !important;">
+                                    <div class="mb-2">
+                                        <input type="text" x-model="newSqlExample.description" class="form-control form-control-sm" 
+                                               placeholder="Descripción (ej: Ventas por mes)">
+                                    </div>
+                                    <div class="mb-2">
+                                        <input type="text" x-model="newSqlExample.question" class="form-control form-control-sm" 
+                                               placeholder="Pregunta en lenguaje natural (ej: ¿Cuántas ventas por mes?)">
+                                    </div>
+                                    <div class="mb-2">
+                                        <textarea x-model="newSqlExample.sql" class="form-control form-control-sm" rows="4"
+                                                  style="font-family: monospace; font-size: 0.85rem;"
+                                                  placeholder="Consulta SQL..."></textarea>
+                                    </div>
+                                    <div class="mb-2">
+                                        <input type="text" x-model="newSqlExample.explanation" class="form-control form-control-sm" 
+                                               placeholder="Explicación opcional (notas sobre el SQL)">
+                                    </div>
+                                    <button class="btn btn-sm btn-primary rounded-pill" @click="addSqlExample()" 
+                                            :disabled="!newSqlExample.description || !newSqlExample.question || !newSqlExample.sql">
+                                        <i class="bi bi-plus-lg me-1"></i> Agregar Ejemplo
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-label small fw-semibold m-0" style="color:var(--c-text-1)">
+                                    Ejemplos Guardados 
+                                    <span x-show="agentConfigData.sqlExamples.length > 0" 
+                                          x-text="'(' + agentConfigData.sqlExamples.length + ')'"
+                                          class="text-muted"></span>
+                                </label>
+                                <button x-show="agentConfigData.sqlExamples.length > 0" 
+                                        class="btn btn-xs btn-outline-danger rounded-pill" 
+                                        @click="clearAllSqlExamples()">
+                                    <i class="bi bi-trash me-1"></i> Limpiar todos
+                                </button>
+                            </div>
+
+                            <div class="sql-examples-list">
+                                <template x-for="(example, index) in agentConfigData.sqlExamples" :key="index">
+                                    <div class="example-item mb-3 p-3 rounded-3 border" style="background:var(--bg-darker); border-color:var(--c-border) !important;">
+                                        <!-- View Mode -->
+                                        <div x-show="editingSqlIndex !== index">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div class="flex-grow-1">
+                                                    <div class="fw-semibold" style="color:var(--c-text-1)" x-text="(index + 1) + '. ' + example.description"></div>
+                                                    <div class="small" style="color:var(--c-text-2)">
+                                                        <i class="bi bi-question-circle me-1"></i>
+                                                        <span x-text="example.question"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex gap-1">
+                                                    <button class="btn btn-xs btn-outline-primary rounded-pill" @click="editSqlExample(index)">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button class="btn btn-xs btn-outline-danger rounded-pill" @click="deleteSqlExample(index)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="sql-preview small p-2 rounded-2" 
+                                                 style="background:var(--bg-main); font-family: monospace; color:var(--c-text-2); cursor: pointer;"
+                                                 @click="example.expanded = !example.expanded">
+                                                <div x-show="!example.expanded" x-text="example.sql.substring(0, 60) + (example.sql.length > 60 ? '...' : '')"></div>
+                                                <div x-show="example.expanded" x-text="example.sql" style="white-space: pre-wrap;"></div>
+                                                <div class="text-end mt-1">
+                                                    <i class="bi" :class="example.expanded ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                                                </div>
+                                            </div>
+                                            <div x-show="example.explanation" class="small mt-2" style="color:var(--c-text-2)">
+                                                <i class="bi bi-info-circle me-1"></i>
+                                                <span x-text="example.explanation"></span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Edit Mode -->
+                                        <div x-show="editingSqlIndex === index">
+                                            <div class="mb-2">
+                                                <input type="text" x-model="editingSqlExample.description" class="form-control form-control-sm" 
+                                                       placeholder="Descripción">
+                                            </div>
+                                            <div class="mb-2">
+                                                <input type="text" x-model="editingSqlExample.question" class="form-control form-control-sm" 
+                                                       placeholder="Pregunta">
+                                            </div>
+                                            <div class="mb-2">
+                                                <textarea x-model="editingSqlExample.sql" class="form-control form-control-sm" rows="4"
+                                                          style="font-family: monospace; font-size: 0.85rem;"
+                                                          placeholder="Consulta SQL..."></textarea>
+                                            </div>
+                                            <div class="mb-2">
+                                                <input type="text" x-model="editingSqlExample.explanation" class="form-control form-control-sm" 
+                                                       placeholder="Explicación opcional">
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button class="btn btn-sm btn-primary rounded-pill" @click="updateSqlExample()">
+                                                    <i class="bi bi-check-lg me-1"></i> Guardar
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary rounded-pill" @click="cancelEditSqlExample()">
+                                                    <i class="bi bi-x-lg me-1"></i> Cancelar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="agentConfigData.sqlExamples.length === 0" class="text-center py-4" style="color:var(--c-text-2)">
+                                    <i class="bi bi-code-square fs-1 d-block mb-2 opacity-50"></i>
+                                    <p class="small mb-0">No hay ejemplos SQL guardados</p>
+                                    <p class="small">Agrega ejemplos para ayudar al agente a generar mejores consultas</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- No Connection Selected -->
+                    <div x-show="!agentConfigData.connectionId" class="text-center py-5" style="color:var(--c-text-2)">
+                        <i class="bi bi-robot fs-1 d-block mb-3 opacity-50"></i>
+                        <p>Selecciona una base de datos para configurar el agente</p>
                     </div>
                 </div>
             </div>

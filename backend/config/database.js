@@ -8,6 +8,10 @@ const sequelize = new Sequelize({
     dialect: 'sqlite',
     storage: sqlitePath,
     logging: false,
+    dialectOptions: {
+        // Enable foreign key constraints for SQLite
+        foreignKeys: true
+    }
 });
 
 module.exports = sequelize;
