@@ -125,16 +125,28 @@ const buildAgentQueryPrompt = async (question, context) => {
         businessSection = `\n=== CONTEXTO DE NEGOCIO ===\n${agentConfig.businessContext}\n`;
     }
 
-    // Build SQL examples section
+    // Build SQL examples section - grouped by category
     let examplesSection = '';
     if (agentConfig?.sqlExamples && agentConfig.sqlExamples.length > 0) {
         examplesSection = '\n=== EJEMPLOS DE CONSULTAS SQL ===\n';
-        examplesSection += 'Usa estos ejemplos como referencia para generar SQL similar:\n\n';
+        examplesSection += 'Usa estos ejemplos como referencia, organizados por categoría:\n\n';
         
-        agentConfig.sqlExamples.forEach((example, index) => {
-            examplesSection += `Ejemplo ${index + 1}: ${example.description}\n`;
-            examplesSection += `Pregunta: ${example.question}\n`;
-            examplesSection += `SQL:\n${example.sql}\n\n`;
+        // Group examples by category
+        const byCategory = {};
+        agentConfig.sqlExamples.forEach(ex => {
+            const cat = ex.category || 'General';
+            if (!byCategory[cat]) byCategory[cat] = [];
+            byCategory[cat].push(ex);
+        });
+        
+        // Display by category
+        Object.entries(byCategory).forEach(([category, examples]) => {
+            examplesSection += `\n--- ${category.toUpperCase()} ---\n`;
+            examples.forEach((example, index) => {
+                examplesSection += `Ejemplo ${index + 1}: ${example.description}\n`;
+                examplesSection += `Pregunta: ${example.question}\n`;
+                examplesSection += `SQL:\n${example.sql}\n\n`;
+            });
         });
         
         examplesSection += '=== FIN EJEMPLOS ===\n';
@@ -155,14 +167,22 @@ INSTRUCCIONES:
 - Sugiere insights relevantes basados en los datos cuando sea apropiado
 - Si detectas anomalías o patrones interesantes, menciónalos
 
+TIPOS DE RESPUESTA:
+1. Si la pregunta es un saludo ("hola", "buenos días", etc.) o pregunta general sobre quién eres:
+   → Responde de forma conversacional y amigable, sin SQL
+   
+2. Si la pregunta requiere consultar datos de la base de datos:
+   → Genera ÚNICAMENTE la consulta SQL SELECT válida
+
 REGLAS DE SEGURIDAD:
-- Solo genera sentencias SELECT
+- Solo genera sentencias SELECT, SHOW, DESCRIBE
 - NUNCA uses INSERT, UPDATE, DELETE, DROP o cualquier comando que modifique datos
 
 FORMATO DE RESPUESTA:
-- Responde ÚNICAMENTE con la consulta SQL válida
+- Para saludos/preguntas generales: responde con texto conversacional natural
+- Para consultas de datos: responde ÚNICAMENTE con la consulta SQL válida
 - Sin explicaciones ni bloques de código markdown
-- Devuelve solo la cadena SQL pura`;
+- Devuelve solo la cadena SQL pura (cuando sea SQL)`;
 
     const userPrompt = enriched?.enriched 
         ? `Pregunta del usuario: ${question}\n\n(Nota: Esta pregunta ha sido enriquecida con contexto previo)`

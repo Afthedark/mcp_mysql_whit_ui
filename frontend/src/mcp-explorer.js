@@ -51,6 +51,7 @@ window.mcpExplorerApp = function() {
 
         // SQL Examples Form
         newSqlExample: {
+            category: '',
             description: '',
             question: '',
             sql: '',
@@ -58,11 +59,16 @@ window.mcpExplorerApp = function() {
         },
         editingSqlIndex: null,
         editingSqlExample: {
+            category: '',
             description: '',
             question: '',
             sql: '',
             explanation: ''
         },
+        
+        // SQL Example Categories
+        sqlExampleCategories: ['Ventas', 'Productos', 'Clientes', 'Operaciones', 'Análisis', 'General'],
+        selectedCategory: '',
 
         // Form
         selectedConnectionId: '',
@@ -647,6 +653,17 @@ window.mcpExplorerApp = function() {
 
         // --- SQL Examples Functions ---
         
+        // Get unique categories from examples
+        getSqlExampleCategories() {
+            const categories = [...new Set(this.agentConfigData.sqlExamples.map(ex => ex.category || 'General'))];
+            return categories.sort();
+        },
+        
+        // Get examples by category
+        getExamplesByCategory(category) {
+            return this.agentConfigData.sqlExamples.filter(ex => (ex.category || 'General') === category);
+        },
+        
         addSqlExample() {
             if (!this.newSqlExample.description || !this.newSqlExample.question || !this.newSqlExample.sql) {
                 UIUtils.showToast('Completa todos los campos requeridos', 'warning');
@@ -654,6 +671,7 @@ window.mcpExplorerApp = function() {
             }
             
             this.agentConfigData.sqlExamples.push({
+                category: this.newSqlExample.category || 'General',
                 description: this.newSqlExample.description,
                 question: this.newSqlExample.question,
                 sql: this.newSqlExample.sql,
@@ -663,6 +681,7 @@ window.mcpExplorerApp = function() {
             
             // Limpiar formulario
             this.newSqlExample = {
+                category: '',
                 description: '',
                 question: '',
                 sql: '',
@@ -676,6 +695,7 @@ window.mcpExplorerApp = function() {
             this.editingSqlIndex = index;
             const example = this.agentConfigData.sqlExamples[index];
             this.editingSqlExample = {
+                category: example.category || 'General',
                 description: example.description,
                 question: example.question,
                 sql: example.sql,
@@ -693,6 +713,7 @@ window.mcpExplorerApp = function() {
             
             this.agentConfigData.sqlExamples[this.editingSqlIndex] = {
                 ...this.agentConfigData.sqlExamples[this.editingSqlIndex],
+                category: this.editingSqlExample.category || 'General',
                 description: this.editingSqlExample.description,
                 question: this.editingSqlExample.question,
                 sql: this.editingSqlExample.sql,
@@ -701,6 +722,7 @@ window.mcpExplorerApp = function() {
             
             this.editingSqlIndex = null;
             this.editingSqlExample = {
+                category: '',
                 description: '',
                 question: '',
                 sql: '',
@@ -713,6 +735,7 @@ window.mcpExplorerApp = function() {
         cancelEditSqlExample() {
             this.editingSqlIndex = null;
             this.editingSqlExample = {
+                category: '',
                 description: '',
                 question: '',
                 sql: '',

@@ -74,6 +74,32 @@ const handleChat = async (req, res, next) => {
         console.log(generatedSQL);
         console.log('=====================');
 
+        // Check if the response is a greeting/conversational message (not SQL)
+        // If it doesn't look like SQL, treat it as a direct response
+        const looksLikeSQL = /^(SELECT|SHOW|DESCRIBE|EXPLAIN)\s+/i.test(generatedSQL);
+        
+        if (!looksLikeSQL) {
+            // The AI responded with a conversational message, not SQL
+            const reply = generatedSQL;
+            await Message.create({ 
+                chatId: parseInt(currentChatId), 
+                role: 'assistant', 
+                content: reply, 
+                sqlGenerated: null,
+                metadata: { isConversational: true }
+            });
+            return res.json({ 
+                success: true, 
+                reply, 
+                sqlGenerated: null, 
+                historyId: parseInt(currentChatId),
+                agentContext: {
+                    isFollowUp: enriched.isFollowUp,
+                    isConversational: true
+                }
+            });
+        }
+
         // Validate SQL (read-only only)
         const validation = sqlValidator.validateReadOnly(generatedSQL);
         if (!validation.isValid) {

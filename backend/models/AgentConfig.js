@@ -53,7 +53,12 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: true,
             get() {
                 const rawValue = this.getDataValue('sqlExamples');
-                return rawValue ? JSON.parse(rawValue) : [];
+                const examples = rawValue ? JSON.parse(rawValue) : [];
+                // Migration: add default category if not exists
+                return examples.map(ex => ({
+                    ...ex,
+                    category: ex.category || 'General'
+                }));
             },
             set(value) {
                 this.setDataValue('sqlExamples', value ? JSON.stringify(value) : null);
