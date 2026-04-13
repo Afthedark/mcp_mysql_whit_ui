@@ -48,7 +48,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
 
-sequelize.sync({ alter: true }).then(() => {
+sequelize.sync({ force: false, alter: false }).then(() => {
     console.log('📦 SQLite memory database ready');
     app.listen(PORT, () => {
         console.log(`🚀 MCP MySQL Explorer running at http://localhost:${PORT}`);

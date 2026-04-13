@@ -1,5 +1,10 @@
 module.exports = (sequelize, DataTypes) => {
     const DatabaseConnection = sequelize.define('DatabaseConnection', {
+        id: {
+            type: DataTypes.INTEGER,
+            primaryKey: true,
+            autoIncrement: true
+        },
         name: {
             type: DataTypes.STRING,
             allowNull: false,
