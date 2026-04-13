@@ -1,0 +1,24 @@
+{
+  "name": "mcp-mysql-backend",
+  "version": "1.0.0",
+  "description": "MCP MySQL Server with Multi-DB Support and AI Chat",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node seeds/init.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "@naganpm/mysql-mcp-server": "latest",
+    "axios": "latest",
+    "better-sqlite3": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "mysql2": "latest",
+    "openai": "latest",
+    "sequelize": "latest",
+    "sqlite3": "^6.0.1"
+  }
+}

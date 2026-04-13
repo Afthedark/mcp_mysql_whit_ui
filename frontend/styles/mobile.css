@@ -1,0 +1,30 @@
+/* ============================================
+   MCP MySQL Explorer - Mobile Styles
+   ============================================ */
+@media (max-width: 768px) {
+    body { overflow-x: hidden !important; }
+    .wrapper-scroll { overflow-x: hidden !important; overflow-y: hidden !important; }
+
+    .mobile-header { height: 56px; background: var(--bg-main) !important; }
+
+    .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); width: 85%; max-width: 300px; height: 100vh; height: 100dvh; z-index: 1050; }
+    .sidebar.mobile-open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.5); }
+
+    .main-panel { height: 100dvh; width: 100%; padding-top: 56px; margin-left: 0 !important; }
+
+    .db-selector-pill { min-width: 120px !important; max-width: 160px !important; height: 32px !important; font-size: 0.75rem !important; padding: 5px 28px 5px 28px !important; }
+    .db-selector-icon { font-size: 0.75rem !important; left: 8px !important; }
+
+    .theme-icon-btn { width: 28px !important; height: 28px !important; font-size: 0.95rem !important; }
+
+    .modal-dialog { margin: 0.5rem; }
+    .card-body { padding: 0.75rem !important; }
+}
+
+@media (min-width: 769px) and (max-width: 991px) {
+    .sidebar { width: 260px; min-width: 260px; }
+}
+
+@media (min-width: 1200px) {
+    .sidebar { width: 300px; min-width: 300px; }
+}

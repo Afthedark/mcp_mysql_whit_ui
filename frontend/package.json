@@ -1,0 +1,11 @@
+{
+  "name": "mcp-mysql-frontend",
+  "version": "1.0.0",
+  "description": "MCP MySQL Explorer Frontend with Deep Chat",
+  "scripts": {
+    "start": "npx http-server . -p 3001 -c-1 --cors"
+  },
+  "dependencies": {
+    "deep-chat": "latest"
+  }
+}
